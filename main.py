@@ -149,18 +149,24 @@ async def invite_link(interaction: discord.Interaction):
     mode="합성 모드"
 )
 async def generate(interaction: discord.Interaction, mode: str):
+    try:
+        last_img[str(interaction.channel_id)]
+    except KeyError:
+        return await interaction.response.send_message("사진을 먼저 보내주세요.")
+    mode = mode.lower()
+    await interaction.response.send_message("생성 중...")
+    filename = f"{int(time.time())}.{last_img[str(interaction.channel_id)].content_type.split('/')[1]}"
+    png = filename.split('.')[0]+'.png'
+    await last_img[str(interaction.channel_id)].save(f"temp/{filename}")
     if mode == "yoon":
-        try:
-            last_img[str(interaction.channel_id)]
-        except KeyError:
-            return await interaction.response.send_message("사진을 먼저 보내주세요.")
-        await interaction.response.send_message("생성 중...")
-        filename = f"{time.time()}.{last_img[str(interaction.channel_id)].content_type.split('/')[1]}"
-        png = filename.split('.')[0]+'.png'
-        await last_img[str(interaction.channel_id)].save(f"temp/{filename}")
         os.system(f'magick convert temp/{filename} -resize 1280x720! -background none -virtual-pixel background +distort Perspective "0,0 136,269 %[fx:w-1],0 305,223 0,%[fx:h-1] 178,525 %[fx:w-1],%[fx:h-1] 331,417" temp/{png}')
         os.system(f'magick convert yoon.jpg temp/{png} -geometry +136+223 -composite temp/{png}')
         os.system(f'magick convert temp/{png} yoon-flower.png -geometry +0+0 -composite temp/{png}')
+        await interaction.channel.send(file=discord.File(f"temp/{png}"))
+    if mode == "han":
+        os.system(f'magick convert temp/{filename} -resize 1207x606! -background none -virtual-pixel background +distort Perspective "0,0 41,97 %[fx:w],0 847,100 0,%[fx:h] 40,304 %[fx:w],%[fx:h] 847,304" temp/{png}')
+        os.system(f'magick convert han.png temp/{png} -geometry +41+97 -composite temp/{png}')
+        os.system(f'magick convert temp/{png} han-person.png -geometry +0+0 -composite temp/{png}')
         await interaction.channel.send(file=discord.File(f"temp/{png}"))
     else:
         return await interaction.response.send_message("mode 변수를 확인해주세요.")
