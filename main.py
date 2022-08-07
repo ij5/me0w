@@ -3,6 +3,7 @@ import os
 import aiohttp
 import discord
 import datetime
+import time
 import warnings
 from discord import app_commands
 import requests
@@ -59,6 +60,8 @@ class BotClient(discord.Client):
         await self.tree.sync()
 
 client = BotClient(intents=intents)
+
+last_img: dict[str, discord.Attachment] = {}
 
 @client.event
 async def on_ready():
@@ -140,10 +143,35 @@ async def ban_words(interaction: discord.Interaction):
 async def invite_link(interaction: discord.Interaction):
     return await interaction.response.send_message(f"https://discord.com/api/oauth2/authorize?client_id=749263283265077308&permissions=8&scope=bot%20applications.commands")
 
+
+@client.tree.command(description="마지막으로 전송된 이미지를 합성합니다.")
+@app_commands.describe(
+    mode="합성 모드"
+)
+async def generate(interaction: discord.Interaction, mode: str):
+    if mode == "yoon":
+        try:
+            last_img[str(interaction.channel_id)]
+        except KeyError:
+            return await interaction.response.send_message("사진을 먼저 보내주세요.")
+        await interaction.response.send_message("생성 중...")
+        filename = f"{time.time()}.{last_img[str(interaction.channel_id)].content_type.split('/')[1]}"
+        png = filename.split('.')[0]+'.png'
+        await last_img[str(interaction.channel_id)].save(f"temp/{filename}")
+        os.system(f'magick convert temp/{filename} -resize 1280x720! -background none -virtual-pixel background +distort Perspective "0,0 136,269 %[fx:w-1],0 305,223 0,%[fx:h-1] 178,525 %[fx:w-1],%[fx:h-1] 331,417" temp/{png}')
+        os.system(f'magick convert yoon.jpg temp/{png} -geometry +136+223 -composite temp/{png}')
+        os.system(f'magick convert temp/{png} yoon-flower.png -geometry +0+0 -composite temp/{png}')
+        await interaction.channel.send(file=discord.File(f"temp/{png}"))
+    else:
+        return await interaction.response.send_message("mode 변수를 확인해주세요.")
+
 @client.event
 async def on_message(message: discord.Message):
     if message.author == client.user:
         return
+
+    if len(message.attachments) > 0 and "image" in message.attachments[0].content_type:
+        last_img[str(message.channel.id)] = message.attachments[0]
 
     if message.content.startswith("$$"):
         try:
