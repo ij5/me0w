@@ -1,15 +1,15 @@
-from io import BytesIO
+import base64
+from io import BytesIO, StringIO
 import os
 import aiohttp
 import discord
 import datetime
 import time
-import warnings
 from discord import app_commands
 import requests
-import pymongo
 from pymongo import MongoClient
 from dotenv import load_dotenv
+from PIL import Image
 
 load_dotenv()
 
@@ -178,6 +178,31 @@ async def on_message(message: discord.Message):
 
     if len(message.attachments) > 0 and "image" in message.attachments[0].content_type:
         last_img[str(message.channel.id)] = message.attachments[0]
+
+    if message.content == "!gg":
+        if len(message.attachments)>0 and "image" in message.attachments[0].content_type:
+            buf = await message.attachments[0].read()
+            buf = BytesIO(buf)
+            response = requests.post("http://localhost:8080/generate", files={"file": buf})
+            if response.status_code != 200:
+                return await message.reply("서버 상태 코드가 200이 아닙니다.")
+            return await message.reply(file=discord.File(BytesIO(response.content), filename='generated.png'))
+
+    # if message.content == "!arcane":
+    #     if len(message.attachments)>0 and "image" in message.attachments[0].content_type:
+    #         buf = await message.attachments[0].read()
+    #         # img = Image.open(buf)
+    #         # buffered = BytesIO()
+    #         # img.save(buffered)
+    #         img_str = base64.b64encode(buf)
+    #         response = requests.post("https://hf.space/embed/akhaliq/ArcaneGAN/+/api/predict", {
+    #             "data": [
+    #                 img_str,
+    #                 "version 0.4"
+    #             ]
+    #         })
+    #         image_string = StringIO(base64.b64decode(response.json()['data'][0]))
+    #         return await message.reply(file=discord.File(image_string))
 
     if message.content.startswith("$$"):
         try:
