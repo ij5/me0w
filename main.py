@@ -1,15 +1,12 @@
-import base64
 from io import BytesIO, StringIO
 import os
-import aiohttp
 import discord
 import datetime
 import time
 from discord import app_commands
 import requests
-from pymongo import MongoClient
+from pymongo import MongoClient, DESCENDING
 from dotenv import load_dotenv
-from PIL import Image
 
 load_dotenv()
 
@@ -20,6 +17,7 @@ testdb = mongo.test
 db = mongo['meow']
 banwords = db['banwords']
 settings = db['settings']
+banlist = db['banlist']
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -130,6 +128,13 @@ async def set_timeout(interaction: discord.Interaction, time: int):
     
     return await interaction.response.send_message(f"타임아웃이 {time}초로 설정되었습니다.")
 
+@client.tree.command(description="차단 기록을 초기화합니다.")
+async def reset_ban(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        return await interaction.response.send_message("권한이 없습니다.")
+    banlist.delete_many({'guild': str(interaction.guild_id)})
+    return await interaction.response.send_message("모든 차단 기록을 초기화했습니다.")
+
 @client.tree.command(description="차단 단어 목록을 표시합니다.")
 async def ban_words(interaction: discord.Interaction):
     result = ""
@@ -143,6 +148,22 @@ async def ban_words(interaction: discord.Interaction):
 async def invite_link(interaction: discord.Interaction):
     return await interaction.response.send_message(f"https://discord.com/api/oauth2/authorize?client_id=749263283265077308&permissions=8&scope=bot%20applications.commands")
 
+@client.tree.command(description="누적 밴 수를 확인합니다.")
+async def ban_history(interaction: discord.Interaction):
+    send = ""
+    count = 0
+    for user in banlist.find({"guild": str(interaction.guild_id)}).sort('count', DESCENDING):
+        count += user['count']
+        try:
+            duser = await interaction.guild.fetch_member(user['user'])
+        except Exception:
+            continue
+        send += f"{duser.display_name} : {user['count']}회\n"
+    if send == "":
+        send = "클린 서버입니다."
+    else:
+        send = f"총 차단 횟수: {count}\n\n" + send
+    return await interaction.response.send_message(send)
 
 @client.tree.command(description="마지막으로 전송된 이미지를 합성합니다.")
 @app_commands.describe(
@@ -246,6 +267,11 @@ async def on_message(message: discord.Message):
         for w in wordlist[str(message.guild.id)]:
             if w in message.content:
                 await message.author.timeout(datetime.timedelta(seconds=guildsettings[str(message.guild.id)]['timeout']), reason=f"금지 단어 사용: {w}")
+                exists = banlist.find_one({'guild': str(message.guild.id), 'user': str(message.author.id)})
+                if exists is None:
+                    banlist.insert_one({'guild': str(message.guild.id), 'user': str(message.author.id), 'count': 1})
+                else:
+                    banlist.update_one({'guild': str(message.guild.id), 'user': str(message.author.id)}, {'$inc': {'count': 1}})
                 return await message.reply(f"금지 단어 [**{w}**]을/를 사용하여 {guildsettings[str(message.guild.id)]['timeout']}초 동안 **{message.author}**님은 채팅이 금지됩니다.")
     except KeyError:
         return

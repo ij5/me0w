@@ -1,0 +1,5 @@
+git+https://github.com/Rapptz/discord.py
+requests
+pymongo
+pymongo[srv]
+python-dotenv
